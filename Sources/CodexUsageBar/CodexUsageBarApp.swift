@@ -29,9 +29,34 @@ final class UsageStore: ObservableObject {
     @Published var snapshot: UsageSummary?
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var customPath: String {
+        didSet { UserDefaults.standard.set(customPath, forKey: "codexHomePath") }
+    }
 
     private var timer: Timer?
     private var hasStarted = false
+
+    private static let defaultCodexHome: URL =
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex")
+
+    var effectiveCodexHome: URL {
+        guard !customPath.isEmpty else { return Self.defaultCodexHome }
+        let url = URL(fileURLWithPath: customPath)
+        let sessions = url.appendingPathComponent("sessions", isDirectory: true)
+        var isDir: ObjCBool = false
+        if FileManager.default.fileExists(atPath: sessions.path, isDirectory: &isDir), isDir.boolValue {
+            return url
+        }
+        return Self.defaultCodexHome
+    }
+
+    var isCustomPathValid: Bool {
+        guard !customPath.isEmpty else { return true }
+        let sessions = URL(fileURLWithPath: customPath)
+            .appendingPathComponent("sessions", isDirectory: true)
+        var isDir: ObjCBool = false
+        return FileManager.default.fileExists(atPath: sessions.path, isDirectory: &isDir) && isDir.boolValue
+    }
 
     var menuTitle: String {
         guard let total = snapshot?.today.usage.totalTokens, total > 0 else {
@@ -41,6 +66,7 @@ final class UsageStore: ObservableObject {
     }
 
     init() {
+        customPath = UserDefaults.standard.string(forKey: "codexHomePath") ?? ""
         refresh()
     }
 
@@ -61,8 +87,9 @@ final class UsageStore: ObservableObject {
         isLoading = true
         errorMessage = nil
 
+        let home = effectiveCodexHome
         Task.detached {
-            let scanner = CodexUsageScanner()
+            let scanner = CodexUsageScanner(codexHome: home)
             let result: Result<UsageSummary, Error>
             do {
                 result = .success(try scanner.scan())
@@ -88,6 +115,7 @@ private struct UsagePanel: View {
     @State private var chartMode: ChartMode = .last7Days
     @State private var heatmapMonth: Date = Date()
     @State private var modelWindow: UsageWindow = .allTime
+    @State private var showSettings = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -131,6 +159,15 @@ private struct UsagePanel: View {
             }
 
             Spacer()
+
+            Button {
+                showSettings = true
+            } label: {
+                Label("Settings", systemImage: "gearshape")
+            }
+            .sheet(isPresented: $showSettings) {
+                SettingsSheet(store: store)
+            }
 
             Button {
                 store.refresh()
@@ -1120,6 +1157,102 @@ private enum Format {
         formatter.currencyCode = "USD"
         formatter.maximumFractionDigits = 2
         return formatter
+    }
+}
+
+private struct SettingsSheet: View {
+    @ObservedObject var store: UsageStore
+    @Environment(\.dismiss) private var dismiss
+
+    private var defaultPath: String {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".codex").path
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Text("Settings")
+                .font(.title2.weight(.semibold))
+
+            GroupBox {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Codex Data Path")
+                        .font(.headline)
+
+                    HStack(spacing: 6) {
+                        Image(systemName: store.isCustomPathValid ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .foregroundStyle(store.isCustomPathValid ? Palette.green : Palette.rose)
+                        Text(store.effectiveCodexHome.path)
+                            .font(.callout.monospaced())
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+
+                    HStack(spacing: 8) {
+                        TextField("Custom path (leave empty for default)", text: $store.customPath)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.callout.monospaced())
+
+                        Button("Browse...") {
+                            let panel = NSOpenPanel()
+                            panel.canChooseDirectories = true
+                            panel.canChooseFiles = false
+                            panel.allowsMultipleSelection = false
+                            panel.message = "Select your Codex data directory"
+                            panel.directoryURL = URL(fileURLWithPath: store.customPath.isEmpty ? defaultPath : store.customPath)
+                            if panel.runModal() == .OK, let url = panel.url {
+                                store.customPath = url.path
+                            }
+                        }
+                    }
+
+                    if !store.customPath.isEmpty && !store.isCustomPathValid {
+                        Text("No sessions/ folder found at this path. Using default ~/.codex instead.")
+                            .font(.caption)
+                            .foregroundStyle(Palette.rose)
+                    }
+
+                    HStack {
+                        Button("Reset to Default") {
+                            store.customPath = ""
+                        }
+                        .disabled(store.customPath.isEmpty)
+
+                        Spacer()
+
+                        Text("Default: \(defaultPath)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(4)
+            }
+
+            GroupBox {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("About")
+                        .font(.headline)
+                    Text("CodexUsageBar")
+                        .font(.callout.weight(.medium))
+                    Text("A local-only macOS menu bar monitor for Codex usage. Reads token data from ~/.codex on this Mac.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(4)
+            }
+
+            HStack {
+                Spacer()
+                Button("Done") {
+                    store.refresh()
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(24)
+        .frame(width: 480)
+        .background(PanelBackground())
     }
 }
 
