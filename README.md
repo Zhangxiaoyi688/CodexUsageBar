@@ -8,6 +8,30 @@ snapshot found in local Codex session events.
 
 This project is unofficial and is not affiliated with OpenAI.
 
+## Screenshots
+
+### Overview
+
+![CodexUsageBar overview](docs/screenshots/overview.png)
+
+### Account Quota
+
+![Account quota](docs/screenshots/account-quota.png)
+
+### Local Usage
+
+![Local usage](docs/screenshots/local-usage.png)
+
+### Usage Charts
+
+![Last 7 days](docs/screenshots/last-7-days.png)
+
+![Monthly heatmap](docs/screenshots/monthly-heatmap.png)
+
+### Top Models
+
+![Top models](docs/screenshots/top-models.png)
+
 ## Privacy
 
 - Reads local session data from `~/.codex` on this Mac only
