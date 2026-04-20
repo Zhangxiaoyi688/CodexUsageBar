@@ -1,4 +1,4 @@
-# CodexUsageBar
+# CodexUsageBar Codex 用量插件
 
 A local-only macOS menu bar monitor for Codex usage.
 
