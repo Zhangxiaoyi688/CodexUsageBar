@@ -32,6 +32,9 @@ final class UsageStore: ObservableObject {
     @Published var customPath: String {
         didSet { UserDefaults.standard.set(customPath, forKey: "codexHomePath") }
     }
+    @Published var useGlassEffect: Bool {
+        didSet { UserDefaults.standard.set(useGlassEffect, forKey: "useGlassEffect") }
+    }
 
     private var timer: Timer?
     private var hasStarted = false
@@ -67,6 +70,7 @@ final class UsageStore: ObservableObject {
 
     init() {
         customPath = UserDefaults.standard.string(forKey: "codexHomePath") ?? ""
+        useGlassEffect = UserDefaults.standard.bool(forKey: "useGlassEffect")
         refresh()
     }
 
@@ -145,7 +149,7 @@ private struct UsagePanel: View {
             }
         }
         .padding(18)
-        .background(PanelBackground())
+        .background(PanelBackground(useGlass: store.useGlassEffect))
     }
 
     private var header: some View {
@@ -223,17 +227,9 @@ private struct UsagePanel: View {
                     }
                 }
                 .padding(14)
-                .background(
-                    LinearGradient(
-                        colors: [Palette.surfaceRaised, Palette.surfaceSoft, Palette.surface],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(Palette.stroke, lineWidth: 1)
+                .cardBackground(
+                    useGlass: store.useGlassEffect,
+                    gradient: [Palette.surfaceRaised, Palette.surfaceSoft, Palette.surface]
                 )
             } else {
                 VStack(alignment: .leading, spacing: 6) {
@@ -272,7 +268,8 @@ private struct UsagePanel: View {
             UsageSummaryCard(
                 title: selectedWindow.title,
                 summary: selectedWindow.summary(from: snapshot),
-                accent: selectedWindow.accent
+                accent: selectedWindow.accent,
+                useGlass: store.useGlassEffect
             )
         }
     }
@@ -312,9 +309,9 @@ private struct UsagePanel: View {
             }
 
             if chartMode == .last7Days {
-                UsageBarChart(days: snapshot.recentDays)
+                UsageBarChart(days: snapshot.recentDays, useGlass: store.useGlassEffect)
             } else {
-                MonthlyHeatmap(allDays: snapshot.allDays, month: heatmapMonth)
+                MonthlyHeatmap(allDays: snapshot.allDays, month: heatmapMonth, useGlass: store.useGlassEffect)
             }
         }
     }
@@ -340,7 +337,7 @@ private struct UsagePanel: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             } else {
-                ModelDonutSection(models: models)
+                ModelDonutSection(models: models, useGlass: store.useGlassEffect)
             }
         }
     }
@@ -542,11 +539,12 @@ private struct UsageSummaryCard: View {
     var title: String
     var summary: UsageWindowSummary
     var accent: Color
+    var useGlass: Bool = false
 
     /// Visual scaling factor for the output bar so it isn't invisible when
     /// input tokens dominate by 100×+.  The displayed number stays exact;
     /// only the bar width is multiplied.
-    private static let outputBarScale: Double = 10
+    private static let outputBarScale: Double = 50
 
     private var maxTokenValue: Int64 {
         let scaledOutput = Int64(Double(summary.usage.outputTokens) * Self.outputBarScale)
@@ -591,17 +589,10 @@ private struct UsageSummaryCard: View {
             }
         }
         .padding(14)
-        .background(
-            LinearGradient(
-                colors: [Palette.surfaceRaised, Palette.surfaceSoft],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
-            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(accent.opacity(0.24), lineWidth: 1)
+        .cardBackground(
+            useGlass: useGlass,
+            gradient: [Palette.surfaceRaised, Palette.surfaceSoft],
+            strokeColor: accent.opacity(0.24)
         )
     }
 }
@@ -690,6 +681,7 @@ private struct CacheHitBar: View {
 
 private struct UsageBarChart: View {
     var days: [DailyUsage]
+    var useGlass: Bool = false
     @State private var highlightedDayKey: String?
 
     private var maxTokens: Int64 {
@@ -738,10 +730,10 @@ private struct UsageBarChart: View {
             .frame(height: 180, alignment: .bottom)
             .padding(.horizontal, 10)
             .padding(.top, 10)
-            .background(Palette.surfaceSoft, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Palette.stroke, lineWidth: 1)
+            .cardBackground(
+                useGlass: useGlass,
+                gradient: [Palette.surfaceSoft],
+                strokeColor: Palette.stroke
             )
 
             if let day = highlightedDay {
@@ -755,10 +747,10 @@ private struct UsageBarChart: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
-                .background(Palette.surfaceSoft, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(Palette.stroke, lineWidth: 1)
+                .cardBackground(
+                    useGlass: useGlass,
+                    gradient: [Palette.surfaceSoft],
+                    strokeColor: Palette.stroke
                 )
             }
         }
@@ -793,6 +785,7 @@ private struct MetricChip: View {
 private struct MonthlyHeatmap: View {
     var allDays: [DailyUsage]
     var month: Date
+    var useGlass: Bool = false
     @State private var selectedDayKey: String?
 
     private var calendar: Calendar { Calendar.current }
@@ -867,7 +860,7 @@ private struct MonthlyHeatmap: View {
                                 .overlay(
                                     Text(dayNum)
                                         .font(.system(size: 8, weight: .medium))
-                                        .foregroundStyle(intensity > 0.5 ? .white.opacity(0.9) : .secondary)
+                                        .foregroundStyle(intensity > 0.5 ? .primary : .secondary)
                                 )
                                 .onTapGesture { selectedDayKey = selectedDayKey == dayKey ? nil : dayKey }
                         } else {
@@ -889,10 +882,11 @@ private struct MonthlyHeatmap: View {
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
-                .background(Palette.surfaceRaised, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .stroke(Palette.stroke, lineWidth: 1)
+                .cardBackground(
+                    useGlass: useGlass,
+                    cornerRadius: 6,
+                    gradient: [Palette.surfaceRaised],
+                    strokeColor: Palette.stroke
                 )
                 .padding(.top, 4)
             }
@@ -909,10 +903,10 @@ private struct MonthlyHeatmap: View {
             .padding(.top, 4)
         }
         .padding(10)
-        .background(Palette.surfaceSoft, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(Palette.stroke, lineWidth: 1)
+        .cardBackground(
+            useGlass: useGlass,
+            gradient: [Palette.surfaceSoft],
+            strokeColor: Palette.stroke
         )
         .onChange(of: month) { _ in selectedDayKey = nil }
     }
@@ -932,6 +926,7 @@ private let donutColors: [Color] = [
 
 private struct ModelDonutSection: View {
     var models: [ModelUsage]
+    var useGlass: Bool = false
     @State private var hoveredModel: String?
 
     private var grandTotal: Int64 {
@@ -1018,17 +1013,10 @@ private struct ModelDonutSection: View {
             }
         }
         .padding(14)
-        .background(
-            LinearGradient(
-                colors: [Palette.surfaceRaised, Palette.surfaceSoft],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
-            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(Palette.stroke, lineWidth: 1)
+        .cardBackground(
+            useGlass: useGlass,
+            gradient: [Palette.surfaceRaised, Palette.surfaceSoft],
+            strokeColor: Palette.stroke
         )
     }
 }
@@ -1229,6 +1217,18 @@ private struct SettingsSheet: View {
             }
 
             GroupBox {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Appearance")
+                        .font(.headline)
+                    Toggle("Use Liquid Glass", isOn: $store.useGlassEffect)
+                    Text("Uses macOS Liquid Glass translucent style for cards and panels (macOS 26+)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(4)
+            }
+
+            GroupBox {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("About")
                         .font(.headline)
@@ -1252,12 +1252,83 @@ private struct SettingsSheet: View {
         }
         .padding(24)
         .frame(width: 480)
-        .background(PanelBackground())
+        .background(PanelBackground(useGlass: store.useGlassEffect))
+    }
+}
+
+private struct GlassCardModifier: ViewModifier {
+    var useGlass: Bool
+    var cornerRadius: CGFloat = 8
+    var gradient: [Color] = [Palette.surfaceRaised, Palette.surfaceSoft]
+    var strokeColor: Color = Palette.stroke
+
+    func body(content: Content) -> some View {
+        if useGlass {
+            if #available(macOS 26.0, *) {
+                content
+                    .glassEffect(in: .rect(cornerRadius: cornerRadius))
+            } else {
+                content
+                    .background(
+                        .ultraThinMaterial,
+                        in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .stroke(Palette.stroke, lineWidth: 1)
+                    )
+            }
+        } else {
+            content
+                .background(
+                    LinearGradient(
+                        colors: gradient,
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(strokeColor, lineWidth: 1)
+                )
+        }
+    }
+}
+
+private extension View {
+    func cardBackground(
+        useGlass: Bool,
+        cornerRadius: CGFloat = 8,
+        gradient: [Color] = [Palette.surfaceRaised, Palette.surfaceSoft],
+        strokeColor: Color = Palette.stroke
+    ) -> some View {
+        modifier(GlassCardModifier(
+            useGlass: useGlass,
+            cornerRadius: cornerRadius,
+            gradient: gradient,
+            strokeColor: strokeColor
+        ))
     }
 }
 
 private struct PanelBackground: View {
+    var useGlass: Bool = false
+
     var body: some View {
+        if useGlass {
+            if #available(macOS 26.0, *) {
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+            } else {
+                normalBackground
+            }
+        } else {
+            normalBackground
+        }
+    }
+
+    private var normalBackground: some View {
         ZStack {
             LinearGradient(
                 colors: [
@@ -1282,19 +1353,46 @@ private struct PanelBackground: View {
 }
 
 private enum Palette {
-    static let panelBase = Color(red: 0.10, green: 0.11, blue: 0.12)
-    static let panelMid = Color(red: 0.15, green: 0.17, blue: 0.16)
-    static let surface = Color(red: 0.14, green: 0.16, blue: 0.17)
-    static let surfaceRaised = Color(red: 0.17, green: 0.19, blue: 0.20)
-    static let surfaceSoft = Color(red: 0.13, green: 0.15, blue: 0.16)
-    static let track = Color.white.opacity(0.16)
-    static let stroke = Color.white.opacity(0.10)
-    static let strokeStrong = Color.white.opacity(0.18)
-    static let teal = Color(red: 0.35, green: 0.72, blue: 0.63)
-    static let cyan = Color(red: 0.45, green: 0.64, blue: 0.80)
-    static let pink = Color(red: 0.73, green: 0.46, blue: 0.57)
-    static let rose = Color(red: 0.83, green: 0.54, blue: 0.47)
-    static let yellow = Color(red: 0.81, green: 0.72, blue: 0.46)
-    static let mint = Color(red: 0.54, green: 0.77, blue: 0.63)
-    static let green = Color(red: 0.45, green: 0.72, blue: 0.55)
+    private static func adaptive(
+        light: (Double, Double, Double),
+        dark: (Double, Double, Double)
+    ) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            let c = isDark ? dark : light
+            return NSColor(red: c.0, green: c.1, blue: c.2, alpha: 1)
+        })
+    }
+
+    private static func adaptiveOpacity(
+        light: (NSColor, Double),
+        dark: (NSColor, Double)
+    ) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            let pair = isDark ? dark : light
+            return pair.0.withAlphaComponent(pair.1)
+        })
+    }
+
+    // Surface colors
+    static let panelBase = adaptive(light: (0.96, 0.96, 0.97), dark: (0.10, 0.11, 0.12))
+    static let panelMid  = adaptive(light: (0.93, 0.93, 0.94), dark: (0.15, 0.17, 0.16))
+    static let surface   = adaptive(light: (0.94, 0.94, 0.95), dark: (0.14, 0.16, 0.17))
+    static let surfaceRaised = adaptive(light: (0.99, 0.99, 1.00), dark: (0.17, 0.19, 0.20))
+    static let surfaceSoft   = adaptive(light: (0.95, 0.95, 0.96), dark: (0.13, 0.15, 0.16))
+
+    // Utility colors
+    static let track       = adaptiveOpacity(light: (.black, 0.10), dark: (.white, 0.16))
+    static let stroke      = adaptiveOpacity(light: (.black, 0.08), dark: (.white, 0.10))
+    static let strokeStrong = adaptiveOpacity(light: (.black, 0.14), dark: (.white, 0.18))
+
+    // Accent colors – same hue, slightly deeper in light mode for contrast
+    static let teal   = adaptive(light: (0.22, 0.60, 0.50), dark: (0.35, 0.72, 0.63))
+    static let cyan   = adaptive(light: (0.30, 0.52, 0.72), dark: (0.45, 0.64, 0.80))
+    static let pink   = adaptive(light: (0.64, 0.34, 0.46), dark: (0.73, 0.46, 0.57))
+    static let rose   = adaptive(light: (0.76, 0.42, 0.34), dark: (0.83, 0.54, 0.47))
+    static let yellow = adaptive(light: (0.72, 0.62, 0.30), dark: (0.81, 0.72, 0.46))
+    static let mint   = adaptive(light: (0.40, 0.66, 0.50), dark: (0.54, 0.77, 0.63))
+    static let green  = adaptive(light: (0.30, 0.62, 0.42), dark: (0.45, 0.72, 0.55))
 }
